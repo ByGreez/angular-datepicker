@@ -1,4 +1,4 @@
-/*global angular navigator*/
+/*global angular navigator moment*/
 
 (function withAngular(angular) {
 
@@ -13,10 +13,13 @@
       'scope': {
         'dateSet': '@',
         'dateMinLimit': '@',
-        'dateMaxLimit': '@'
+        'dateMaxLimit': '@',
+        'startDate': '@',
+        'endDate': '@'
       },
       'link': function linkingFunction($scope, element, attr) {
         //get child input
+        $scope.statusCalendar = 'calendar';
         var selector = attr.selector
           , thisInput = angular.element(selector ? element[0].querySelector('.' + selector) : element[0].children[0])
           , theCalendar
@@ -27,6 +30,8 @@
           , dateFormat = attr.dateFormat
           , dateMinLimit
           , dateMaxLimit
+          , startDate
+          , endDate
           , date = new Date()
           , isMouseOn = false
           , isMouseOnInput = false
@@ -35,18 +40,22 @@
           , htmlTemplate = '<div class="_720kb-datepicker-calendar" ng-blur="hideCalendar()">' +
           //motnh+year header
           '<div class="_720kb-datepicker-calendar-header" ng-hide="isMobile()">' +
-          '<div class="_720kb-datepicker-calendar-header-left">' +
+          //course
+          '<div class="selectStatusCalendar" ng-show="availableCourseDays"><div ng-click="statusCalendar=\'calendar\'">Календарь</div><div ng-click="statusCalendar=\'course\'">Дни курса</div></div>'+
+          '<div class="_720kb-datepicker-calendar-header-left" ng-hide="statusCalendar==\'course\'">' +
           '<a href="javascript:void(0)" ng-click="prevMonth()">' + prevButton + '</a>' +
           '</div>' +
-          '<div class="_720kb-datepicker-calendar-header-middle _720kb-datepicker-calendar-month">' +
+          '<div class="_720kb-datepicker-calendar-header-middle _720kb-datepicker-calendar-month" ng-hide="statusCalendar==\'course\'">' +
           '{{month}} <a href="javascript:void(0)" ng-click="showYearsPagination = !showYearsPagination"><span>{{year}} <i ng-if="!showYearsPagination">&dtrif;</i> <i ng-if="showYearsPagination">&urtri;</i> </span> </a>' +
           '</div>' +
-          '<div class="_720kb-datepicker-calendar-header-right">' +
+          '<div class="_720kb-datepicker-calendar-header-right" ng-hide="statusCalendar==\'course\'">' +
           '<a href="javascript:void(0)" ng-click="nextMonth()">' + nextButton + '</a>' +
           '</div>' +
           '</div>' +
           //Mobile month+year pagination
           '<div class="_720kb-datepicker-calendar-header" ng-show="isMobile()">' +
+          //course
+          '<div class="selectStatusCalendar"><div ng-click="statusCalendar=\'calendar\'">Календарь</div><div ng-click="statusCalendar=\'course\'">Дни курса</div></div>'+
           '<div class="_720kb-datepicker-calendar-header-middle _720kb-datepicker-mobile-item _720kb-datepicker-calendar-month">' +
           '<select ng-model="month" ng-change="selectedMonthHandle(month)">' +
           '<option ng-repeat="item in months" ng-selected="month === item" ng-disabled=\'!isSelectableMaxDate(item + " " + day + ", " + year) || !isSelectableMinDate(item + " " + day + ", " + year)\' ng-value="item">{{item}}</option>' +
@@ -61,7 +70,7 @@
           '</div>' +
           '</div>' +
           //years pagination header
-          '<div class="_720kb-datepicker-calendar-header" ng-show="showYearsPagination">' +
+          '<div class="_720kb-datepicker-calendar-header" ng-show="showYearsPagination && statusCalendar==\'calendar\'">' +
           '<div class="_720kb-datepicker-calendar-years-pagination">' +
           '<a ng-class="{\'_720kb-datepicker-active\': y === year, \'_720kb-datepicker-disabled\': !isSelectableMaxYear(y) || !isSelectableMinYear(y)}" href="javascript:void(0)" ng-click="setNewYear(y)" ng-repeat="y in paginationYears">{{y}}</a>' +
           '</div>' +
@@ -71,17 +80,31 @@
           '</div>' +
           '</div>' +
           //days column
-          '<div class="_720kb-datepicker-calendar-days-header">' +
+          '<div ng-hide="statusCalendar==\'course\'" class="_720kb-datepicker-calendar-days-header">' +
           '<div ng-repeat="d in daysInString"> {{d}} </div> ' +
           '</div>' +
           //days
-          '<div class="_720kb-datepicker-calendar-body">' +
+          '<div ng-hide="statusCalendar==\'course\'" class="_720kb-datepicker-calendar-body">' +
           '<a href="javascript:void(0)" ng-repeat="px in prevMonthDays" class="_720kb-datepicker-calendar-day _720kb-datepicker-disabled">{{px}}</a>' +
           '<a href="javascript:void(0)" ng-repeat="item in days" ng-click="setDatepickerDay(item)" ng-class="{\'_720kb-datepicker-active\': day === item, \'_720kb-datepicker-disabled\': !isSelectableMinDate(year + \'/\' + monthNumber + \'/\' + item ) || !isSelectableMaxDate(year + \'/\' + monthNumber + \'/\' + item)}" class="_720kb-datepicker-calendar-day">{{item}}</a>' +
           '<a href="javascript:void(0)" ng-repeat="nx in nextMonthDays" class="_720kb-datepicker-calendar-day _720kb-datepicker-disabled">{{nx}}</a>' +
           '</div>' +
+              //my course day
+           '<div ng-show="statusCalendar==\'course\'" class="_720kb-datepicker-calendar-body" id="course">' +
+           '<a href="javascript:void(0)" ng-repeat="item in courseDay" ng-click="setDatepickerCourseDay(item)" ng-class="{\'_720kb-datepicker-active\': day === item, \'_720kb-datepicker-disabled\': !isSelectableMinDate(year + \'/\' + monthNumber + \'/\' + item ) || !isSelectableMaxDate(year + \'/\' + monthNumber + \'/\' + item)}" class="_720kb-datepicker-calendar-day">{{item}}</a>' +
+           '</div>' +
+
           '</div>' +
           '</div>';
+        setTimeout(function () {
+          $scope.availableCourseDays = false;
+          if (!_.isUndefined($scope.startDate) || !_.isUndefined($scope.endDate)) {
+            startDate = new Date($scope.startDate);
+            endDate = new Date($scope.endDate);
+            $scope.availableCourseDays = true;
+            $scope.setNumberDayInSchedule();
+          }
+        }, 1000);
 
         $scope.$watch('dateSet', function dateSetWatcher(value) {
           if (value) {
@@ -90,7 +113,18 @@
             $scope.monthNumber = Number($filter('date')(date, 'MM')); // 01-12 like
             $scope.day = Number($filter('date')(date, 'dd')); //01-31 like
             $scope.year = Number($filter('date')(date, 'yyyy'));//2014 like
-						$scope.setDaysInMonth($scope.monthNumber, $scope.year);
+          }
+        });
+        $scope.$watch('endDate', function (value) {
+          if (value) {
+            endDate = value;
+            $scope.setNumberDayInSchedule();
+          }
+        });
+        $scope.$watch('startDate', function (value) {
+          if (value) {
+            startDate = value;
+            $scope.setNumberDayInSchedule();
           }
         });
 
@@ -306,31 +340,6 @@
           }
         };
 
-        $scope.classHelper = {
-            'add': function add(ele, klass){
-                if (ele.className.indexOf(klass) > -1){
-                    return;
-                }
-                var classes = ele.className.split(' ');
-                classes.push(klass);
-                ele.className = classes.join(' ');
-            },
-            'remove': function remove(ele, klass){
-                var i, classes;
-                if (ele.className.indexOf(klass) === -1){
-                  return;
-                }
-                classes = ele.className.split(' ');
-                for (i = 0;i < classes.length;i += 1){
-                  if (classes[i] === klass){
-                        classes = classes.slice(0, i).concat(classes.slice(i + 1));
-                        break;
-                  }
-                }
-                ele.className = classes.join(' ');
-            }
-        };
-
         $scope.showCalendar = function manageShowCalendar() {
           //lets hide all the latest instances of datepicker
           pageDatepickers = $window.document.getElementsByClassName('_720kb-datepicker-calendar');
@@ -357,7 +366,15 @@
             $scope.classHelper.remove(theCalendar, '_720kb-datepicker-open');
           }
         };
-
+        $scope.setNumberDayInSchedule = function(){
+          $scope.courseDay = [];
+          var duration = moment.duration(moment(startDate).diff(moment(endDate))).asDays();
+          console.log(duration);
+          duration = (duration<0)?-duration:duration;
+          for (var i = 1; i <= duration; i += 1) {
+            $scope.courseDay.push(i);
+          }
+        };
 
         $scope.setDaysInMonth = function setDaysInMonth(month, year) {
 
@@ -420,6 +437,17 @@
             $scope.nextMonthDays = [];
           }
         };
+        $scope.setDatepickerCourseDay = function setDatepickerCourseDay(day){
+          var date = new moment(startDate).add(day-1, 'day');
+          $scope.year = date.year();
+          //+1 it is fix for moment. moment start month for 0 - Jan, 1 -Feb....
+          $scope.monthNumber = date.month()+1;
+          $scope.month = date.format('MMMM');
+          $scope.day = Number(date.format('D'));
+          $scope.setDaysInMonth($scope.monthNumber, $scope.year);
+          $scope.setInputValue();
+          $scope.hideCalendar();
+        };
 
         $scope.setDatepickerDay = function setDatepickeDay(day) {
 
@@ -441,12 +469,12 @@
             daysToAppendPrepend = 50;
           }
 
-          for (i = daysToAppendPrepend; i > 0; i -= 1) { /* Years */
+          for (i = daysToAppendPrepend/* Years */; i > 0; i -= 1) {
 
             theNewYears.push(Number(startingYear) - i);
           }
 
-          for (i = 0; i < daysToAppendPrepend; i += 1) { /* Years */
+          for (i = 0; i < daysToAppendPrepend/* Years */; i += 1) {
 
             theNewYears.push(Number(startingYear) + i);
           }
