@@ -369,7 +369,6 @@
         $scope.setNumberDayInSchedule = function(){
           $scope.courseDay = [];
           var duration = moment.duration(moment(startDate).diff(moment(endDate))).asDays();
-          console.log(duration);
           duration = (duration<0)?-duration:duration;
           for (var i = 1; i <= duration; i += 1) {
             $scope.courseDay.push(i);
